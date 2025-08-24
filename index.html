@@ -6,6 +6,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.4/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
+  <style>
+    #spinCanvas { width: 100%; height: 100%; display: block; }
+  </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
 
@@ -17,24 +20,39 @@
     Connect Wallet
   </button>
 
-  <!-- Game Canvas -->
-  <div id="game" class="mt-10 w-full h-96 hidden">
+  <!-- Game Section -->
+  <div id="game" class="mt-10 w-full h-[500px] hidden">
     <canvas id="spinCanvas"></canvas>
   </div>
 
   <script>
     let provider, signer, scene, camera, renderer, cube, spinning = false;
 
+    // Your Pharos RPC (replace if needed)
+    const PHAROS_RPC = "https://your_pharos_testnet_rpc";
+    const PHAROS_CHAIN_ID = "0xA80F0"; // example hex, replace with correct Pharos ID
+
     // Wallet connect
     async function connectWallet() {
       if (window.ethereum) {
         try {
+          // Switch to Pharos testnet
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: PHAROS_CHAIN_ID,
+              chainName: "Pharos Testnet",
+              rpcUrls: [PHAROS_RPC],
+              nativeCurrency: { name: "Pharos Test", symbol: "PHRS", decimals: 18 },
+              blockExplorerUrls: ["https://your_explorer_url"]
+            }]
+          });
+
           await window.ethereum.request({ method: "eth_requestAccounts" });
+
           provider = new ethers.BrowserProvider(window.ethereum);
           signer = await provider.getSigner();
-
-          const address = await signer.getAddress();
-          console.log("Connected:", address);
+          console.log("Connected to:", await signer.getAddress());
 
           // Show game after connect
           document.getElementById("game").classList.remove("hidden");
@@ -61,7 +79,7 @@
       camera.position.z = 5;
 
       renderer = new THREE.WebGLRenderer({ canvas: canvas });
-      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+      renderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
 
       const geometry = new THREE.BoxGeometry();
       const material = new THREE.MeshStandardMaterial({ color: 0x00ffcc });
@@ -75,6 +93,13 @@
       // Start spin on click
       canvas.addEventListener("click", () => {
         spinning = !spinning;
+      });
+
+      // Resize fix
+      window.addEventListener("resize", () => {
+        camera.aspect = canvas.offsetWidth / canvas.offsetHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
       });
     }
 
