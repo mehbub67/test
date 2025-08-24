@@ -1,95 +1,120 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
   <title>Pharos Spin Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.4/dist/ethers.min.js"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background: #101820;
-      color: white;
+      margin: 0; padding: 0;
+      font-family: "Poppins", sans-serif;
+      background: linear-gradient(135deg, #0a0f1f, #1b2838);
+      color: #fff; text-align: center;
+    }
+    header {
+      padding: 20px;
+      background: #141a25;
+      border-bottom: 2px solid #44d7b6;
+    }
+    header h1 { margin: 0; font-size: 2rem; color: #44d7b6; }
+    .container {
+      max-width: 800px; margin: 40px auto; padding: 20px;
+    }
+    #connectBtn, #spinBtn {
+      background: #44d7b6;
+      border: none;
+      padding: 15px 30px;
+      margin: 20px;
+      font-size: 1.1em;
+      font-weight: bold;
+      border-radius: 10px;
+      cursor: pointer;
+      color: #111;
+      transition: background 0.3s;
+    }
+    #connectBtn:hover, #spinBtn:hover {
+      background: #3bbfa0;
     }
     #wheel {
-      margin: 30px auto;
-      width: 300px;
-      height: 300px;
-      border: 15px solid #00d084;
+      width: 250px; height: 250px;
+      border: 12px solid #44d7b6;
       border-radius: 50%;
-      position: relative;
-      transition: transform 4s cubic-bezier(0.33, 1, 0.68, 1);
+      margin: 40px auto;
+      background: conic-gradient(
+        #44d7b6 0deg 90deg,
+        #2d3a4a 90deg 180deg,
+        #44d7b6 180deg 270deg,
+        #2d3a4a 270deg 360deg
+      );
+      transition: transform 2.5s ease-out;
     }
-    #spinBtn {
-      margin-top: 20px;
-      padding: 15px 30px;
-      font-size: 18px;
-      cursor: pointer;
-      border: none;
-      border-radius: 10px;
-      background: #00d084;
-      color: #000;
+    footer {
+      padding: 20px; font-size: 0.9em; color: #bbb;
+      border-top: 1px solid #333;
+      margin-top: 40px;
     }
   </style>
 </head>
 <body>
-  <h1>🎰 Spin & Pay with PHRS</h1>
-  <div id="wheel"></div>
-  <button id="connectBtn">Connect Wallet</button>
-  <button id="spinBtn" disabled>Spin (0.1 PHRS)</button>
+  <header>
+    <h1>🎰 Pharos Spin Game</h1>
+    <p>Spin the wheel with <b>0.1 PHRS</b> on Pharos Testnet</p>
+  </header>
+
+  <div class="container">
+    <button id="connectBtn">🔗 Connect Wallet</button>
+
+    <div id="game" style="display:none">
+      <div id="wheel"></div>
+      <button id="spinBtn">🎲 Spin — 0.1 PHRS</button>
+    </div>
+
+    <p id="status"></p>
+  </div>
+
+  <footer>
+    Built on <b>Pharos Testnet</b> • Powered by <b>ethers.js</b>
+  </footer>
 
   <script>
-    const GAME_TREASURY = "0xF787b0A9B186c24d19b8c1681aF09DbEEb2160E9"; // your wallet
+    const RPC = "https://testnet.dplabs-internal.com"; // Official Pharos RPC
+    const TREASURY = "0xF787b0A9B186c24d19b8c1681aF09DbEEb2160E9"; // your wallet
+
     let provider, signer;
 
     // Connect wallet
     document.getElementById("connectBtn").onclick = async () => {
-      if (typeof window.ethereum === "undefined") {
-        alert("Please install MetaMask!");
+      if (!window.ethereum) {
+        alert("Please install MetaMask first.");
         return;
       }
-      try {
-        await ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: "0xA80F0", // 688688 in hex
-            chainName: "Pharos Testnet",
-            nativeCurrency: { name: "Pharos", symbol: "PHRS", decimals: 18 },
-            rpcUrls: ["https://testnet.dplabs-internal.com"],
-            blockExplorerUrls: ["https://testnet.pharosscan.xyz"]
-          }]
-        });
+      await ethereum.request({ method: "eth_requestAccounts" });
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
 
-        await ethereum.request({ method: "eth_requestAccounts" });
-        provider = new ethers.BrowserProvider(window.ethereum);
-        signer = await provider.getSigner();
-        document.getElementById("spinBtn").disabled = false;
-        alert("Wallet connected to Pharos!");
-      } catch (err) {
-        console.error(err);
-        alert("Connection failed!");
-      }
+      document.getElementById("connectBtn").style.display = "none";
+      document.getElementById("game").style.display = "block";
+      document.getElementById("status").innerText = "✅ Wallet connected!";
     };
 
     // Spin + send 0.1 PHRS
     document.getElementById("spinBtn").onclick = async () => {
-      try {
-        const wheel = document.getElementById("wheel");
-        const deg = Math.floor(Math.random() * 360) + 720; // spin at least 2 turns
-        wheel.style.transform = `rotate(${deg}deg)`;
+      const wheel = document.getElementById("wheel");
+      const spin = Math.random() * 720 + 360;
+      wheel.style.transform = `rotate(${spin}deg)`;
 
-        // Send 0.1 PHRS
+      try {
         const tx = await signer.sendTransaction({
-          to: GAME_TREASURY,
+          to: TREASURY,
           value: ethers.parseEther("0.1")
         });
-
-        alert("Transaction sent! Hash: " + tx.hash);
-        console.log("TX:", tx);
-      } catch (err) {
-        console.error(err);
-        alert("Spin failed: " + err.message);
+        document.getElementById("status").innerText = `📤 Tx sent: ${tx.hash}`;
+        await tx.wait();
+        document.getElementById("status").innerText = `✅ Confirmed! Hash: ${tx.hash}`;
+      } catch (e) {
+        console.error(e);
+        document.getElementById("status").innerText = `❌ Error: ${e.message}`;
       }
     };
   </script>
