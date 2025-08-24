@@ -1,122 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Pharos Spin Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.4/dist/ethers.min.js"></script>
   <style>
-    body {
-      margin: 0; padding: 0;
-      font-family: "Poppins", sans-serif;
-      background: linear-gradient(135deg, #0a0f1f, #1b2838);
-      color: #fff; text-align: center;
-    }
-    header {
-      padding: 20px;
-      background: #141a25;
-      border-bottom: 2px solid #44d7b6;
-    }
-    header h1 { margin: 0; font-size: 2rem; color: #44d7b6; }
-    .container {
-      max-width: 800px; margin: 40px auto; padding: 20px;
-    }
-    #connectBtn, #spinBtn {
-      background: #44d7b6;
-      border: none;
-      padding: 15px 30px;
-      margin: 20px;
-      font-size: 1.1em;
-      font-weight: bold;
-      border-radius: 10px;
-      cursor: pointer;
-      color: #111;
-      transition: background 0.3s;
-    }
-    #connectBtn:hover, #spinBtn:hover {
-      background: #3bbfa0;
-    }
-    #wheel {
-      width: 250px; height: 250px;
-      border: 12px solid #44d7b6;
-      border-radius: 50%;
-      margin: 40px auto;
-      background: conic-gradient(
-        #44d7b6 0deg 90deg,
-        #2d3a4a 90deg 180deg,
-        #44d7b6 180deg 270deg,
-        #2d3a4a 270deg 360deg
-      );
-      transition: transform 2.5s ease-out;
-    }
-    footer {
-      padding: 20px; font-size: 0.9em; color: #bbb;
-      border-top: 1px solid #333;
-      margin-top: 40px;
+    body { background: #0f172a; color: white; }
+    .wheel {
+      width: 300px; height: 300px;
+      border-radius: 50%; border: 10px solid #22d3ee;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: bold;
+      transition: transform 4s cubic-bezier(0.25, 1, 0.5, 1);
+      background: conic-gradient(#22d3ee 0 45deg, #fbbf24 45deg 90deg,
+                                 #34d399 90deg 135deg, #f87171 135deg 180deg,
+                                 #818cf8 180deg 225deg, #facc15 225deg 270deg,
+                                 #ec4899 270deg 315deg, #10b981 315deg 360deg);
     }
   </style>
 </head>
-<body>
-  <header>
-    <h1>🎰 Pharos Spin Game</h1>
-    <p>Spin the wheel with <b>0.1 PHRS</b> on Pharos Testnet</p>
-  </header>
+<body class="flex flex-col items-center justify-center min-h-screen space-y-6">
 
-  <div class="container">
-    <button id="connectBtn">🔗 Connect Wallet</button>
+  <h1 class="text-3xl font-bold">🎰 Pharos Spin Game</h1>
+  <button id="connectBtn" class="px-6 py-3 bg-emerald-500 rounded-lg font-semibold">Connect Wallet</button>
 
-    <div id="game" style="display:none">
-      <div id="wheel"></div>
-      <button id="spinBtn">🎲 Spin — 0.1 PHRS</button>
-    </div>
-
-    <p id="status"></p>
+  <div class="relative">
+    <div id="wheel" class="wheel">SPIN</div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-20 text-2xl">⬆</div>
   </div>
 
-  <footer>
-    Built on <b>Pharos Testnet</b> • Powered by <b>ethers.js</b>
-  </footer>
+  <button id="spinBtn" disabled class="px-6 py-3 bg-sky-500 rounded-lg font-semibold">Spin (0.1 PHRS)</button>
+  <p id="result" class="text-xl font-bold"></p>
 
   <script>
-    const RPC = "https://testnet.dplabs-internal.com"; // Official Pharos RPC
-    const TREASURY = "0xF787b0A9B186c24d19b8c1681aF09DbEEb2160E9"; // your wallet
+    const PHAROS_RPC = "https://rpc.testnet.pharos.network"; // RPC
+    const TOKEN_ADDRESS = "0xAf7932A1f9A25897d9F4d5A63d74d0db3094E3b5"; // From docs (PHRS token)
+    const TOKEN_ABI = [
+      "function transfer(address to, uint amount) public returns (bool)",
+      "function decimals() view returns (uint8)"
+    ];
 
-    let provider, signer;
+    let provider, signer, token;
 
-    // Connect wallet
-    document.getElementById("connectBtn").onclick = async () => {
-      if (!window.ethereum) {
-        alert("Please install MetaMask first.");
-        return;
-      }
-      await ethereum.request({ method: "eth_requestAccounts" });
-      provider = new ethers.BrowserProvider(window.ethereum);
-      signer = await provider.getSigner();
-
-      document.getElementById("connectBtn").style.display = "none";
-      document.getElementById("game").style.display = "block";
-      document.getElementById("status").innerText = "✅ Wallet connected!";
-    };
-
-    // Spin + send 0.1 PHRS
-    document.getElementById("spinBtn").onclick = async () => {
-      const wheel = document.getElementById("wheel");
-      const spin = Math.random() * 720 + 360;
-      wheel.style.transform = `rotate(${spin}deg)`;
-
+    async function connectWallet() {
+      if (!window.ethereum) { alert("Please install MetaMask!"); return; }
       try {
-        const tx = await signer.sendTransaction({
-          to: TREASURY,
-          value: ethers.parseEther("0.1")
-        });
-        document.getElementById("status").innerText = `📤 Tx sent: ${tx.hash}`;
-        await tx.wait();
-        document.getElementById("status").innerText = `✅ Confirmed! Hash: ${tx.hash}`;
-      } catch (e) {
-        console.error(e);
-        document.getElementById("status").innerText = `❌ Error: ${e.message}`;
+        await ethereum.request({ method: "eth_requestAccounts" });
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        token = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer);
+        document.getElementById("spinBtn").disabled = false;
+        alert("Wallet connected. Ready to spin!");
+      } catch (err) {
+        console.error(err); alert("Connection failed!");
       }
-    };
+    }
+
+    async function spinGame() {
+      try {
+        // send 0.1 PHRS
+        const decimals = await token.decimals();
+        const amount = ethers.parseUnits("0.1", decimals);
+        const tx = await token.transfer("0xF787b0A9B186c24d19b8c1681aF09DbEEb2160E9", amount);
+        await tx.wait();
+
+        // spin animation
+        const wheel = document.getElementById("wheel");
+        const resultText = document.getElementById("result");
+        const rewards = [10,20,30,100,500,1000,3000];
+        const reward = rewards[Math.floor(Math.random()*rewards.length)];
+        const deg = 1440 + Math.floor(Math.random()*360); // 4 spins + random
+        wheel.style.transform = `rotate(${deg}deg)`;
+
+        setTimeout(()=>{
+          resultText.textContent = `🎉 You won ${reward} points! (Txn Hash: ${tx.hash.slice(0,10)}...)`;
+        }, 4000);
+
+      } catch (err) {
+        console.error(err);
+        alert("Spin failed! " + err.message);
+      }
+    }
+
+    document.getElementById("connectBtn").onclick = connectWallet;
+    document.getElementById("spinBtn").onclick = spinGame;
   </script>
 </body>
 </html>
