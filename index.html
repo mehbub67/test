@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuasarCut — Pharos Testnet dApp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+
+  <!-- Hero -->
+  <header class="text-center py-12">
+    <h1 class="text-4xl font-extrabold text-indigo-400">QuasarCut</h1>
+    <p class="mt-3 text-gray-300">Pharos Testnet dApp Playground</p>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 space-y-10">
+
+    <!-- Wallet Connect -->
+    <section class="bg-gray-800 p-6 rounded-2xl shadow-lg">
+      <h2 class="text-xl font-semibold mb-4">🔗 Connect Wallet</h2>
+      <button id="connectWallet" class="px-5 py-2 bg-indigo-600 rounded-lg hover:bg-indigo-500">
+        Connect Wallet
+      </button>
+      <p id="walletAddress" class="mt-3 text-gray-400 text-sm">Not connected</p>
+    </section>
+
+    <!-- Example: Ethers.js -->
+    <section class="bg-gray-800 p-6 rounded-2xl shadow-lg">
+      <h2 class="text-lg font-semibold mb-4">⚡ Ethers.js Example</h2>
+      <div class="relative">
+        <pre class="bg-gray-900 text-green-400 text-sm p-3 rounded-lg overflow-x-auto">
+<code>
+import { ethers } from "ethers";
+
+const RPC = "https://YOUR_PHAROS_TESTNET_RPC";
+const provider = new ethers.JsonRpcProvider(RPC);
+
+async function connect() {
+  if (window.ethereum) {
+    const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+    console.log("Connected:", accounts[0]);
+    return accounts[0];
+  }
+}
+</code></pre>
+        <button onclick="copyCode(this)" class="absolute top-2 right-2 px-2 py-1 text-xs bg-gray-700 rounded">Copy</button>
+      </div>
+    </section>
+
+    <!-- Example: cURL -->
+    <section class="bg-gray-800 p-6 rounded-2xl shadow-lg">
+      <h2 class="text-lg font-semibold mb-4">📡 cURL Example</h2>
+      <div class="relative">
+        <pre class="bg-gray-900 text-blue-300 text-sm p-3 rounded-lg overflow-x-auto">
+<code>
+curl -X POST https://YOUR_PHAROS_TESTNET_RPC \
+  -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+</code></pre>
+        <button onclick="copyCode(this)" class="absolute top-2 right-2 px-2 py-1 text-xs bg-gray-700 rounded">Copy</button>
+      </div>
+    </section>
+
+    <!-- Example: Solidity ERC-20 -->
+    <section class="bg-gray-800 p-6 rounded-2xl shadow-lg">
+      <h2 class="text-lg font-semibold mb-4">📝 Solidity Example (ERC-20)</h2>
+      <div class="relative">
+        <pre class="bg-gray-900 text-yellow-300 text-sm p-3 rounded-lg overflow-x-auto">
+<code>
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+contract QuasarToken {
+    string public name = "Quasar Token";
+    string public symbol = "QSR";
+    uint8 public decimals = 18;
+    uint public totalSupply = 1000000 * 10**18;
+    mapping(address => uint) public balanceOf;
+
+    constructor() {
+        balanceOf[msg.sender] = totalSupply;
+    }
+}
+</code></pre>
+        <button onclick="copyCode(this)" class="absolute top-2 right-2 px-2 py-1 text-xs bg-gray-700 rounded">Copy</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="text-center text-gray-500 text-sm py-6 mt-10">
+    © 2025 QuasarCut — Built for Pharos Testnet
+  </footer>
+
+  <!-- Scripts -->
+  <script>
+    const connectWalletBtn = document.getElementById("connectWallet");
+    const walletAddress = document.getElementById("walletAddress");
+
+    connectWalletBtn.addEventListener("click", async () => {
+      if (window.ethereum) {
+        try {
+          const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+          walletAddress.textContent = "Connected: " + accounts[0];
+        } catch (error) {
+          walletAddress.textContent = "Connection failed";
+        }
+      } else {
+        walletAddress.textContent = "MetaMask not found";
+      }
+    });
+
+    function copyCode(button) {
+      const code = button.previousElementSibling.innerText;
+      navigator.clipboard.writeText(code);
+      button.textContent = "Copied!";
+      setTimeout(() => button.textContent = "Copy", 1500);
+    }
+  </script>
+</body>
+</html>
