@@ -1,115 +1,178 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Pharos Spin Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Ethers v6 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.4/dist/ethers.umd.min.js"></script>
+  <!-- Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
   <style>
-    #spinCanvas { width: 100%; height: 100%; display: block; }
+    /* Fullscreen 3D canvas behind UI */
+    #spinCanvas{
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
   </style>
 </head>
-<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
+<body class="bg-slate-900 text-white min-h-screen">
 
-  <h1 class="text-3xl font-bold mb-6">🎮 Pharos Testnet Spin Game</h1>
+  <!-- Canvas background -->
+  <canvas id="spinCanvas"></canvas>
 
-  <!-- Connect Button -->
-  <button id="connectBtn"
-    class="px-6 py-3 bg-indigo-600 rounded-xl hover:bg-indigo-700">
-    Connect Wallet
-  </button>
+  <!-- Simple UI on top -->
+  <div class="relative z-10 flex flex-col items-center pt-16 gap-6">
+    <h1 class="text-3xl md:text-4xl font-extrabold">
+      🎮 Pharos Testnet Spin Game
+    </h1>
 
-  <!-- Game Section -->
-  <div id="game" class="mt-10 w-full h-[500px] hidden">
-    <canvas id="spinCanvas"></canvas>
+    <button id="connectBtn"
+      class="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 shadow-lg">
+      Connect Wallet
+    </button>
+
+    <p id="status" class="text-sm text-slate-300"></p>
   </div>
 
   <script>
-    let provider, signer, scene, camera, renderer, cube, spinning = false;
+    // ---------- PHAROS NETWORK CONFIG ----------
+    const PHAROS_RPC = "https://testnet.dplabs-internal.com";
+    // 688,688 decimal -> 0xA8230 hex
+    const PHAROS_CHAIN_ID_HEX = "0xA8230";
+    const PHAROS_CHAIN_NAME = "Pharos Testnet";
+    const PHAROS_EXPLORER = "https://testnet.pharosscan.xyz";
 
-    // Your Pharos RPC (replace if needed)
-    const PHAROS_RPC = "https://your_pharos_testnet_rpc";
-    const PHAROS_CHAIN_ID = "0xA80F0"; // example hex, replace with correct Pharos ID
+    // ---------- WALLET CONNECT ----------
+    const statusEl = document.getElementById("status");
+    const connectBtn = document.getElementById("connectBtn");
 
-    // Wallet connect
-    async function connectWallet() {
-      if (window.ethereum) {
-        try {
-          // Switch to Pharos testnet
+    let provider, signer;
+
+    async function ensurePharosNetwork() {
+      // Try switch first; if not added, add then switch.
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: PHAROS_CHAIN_ID_HEX }]
+        });
+      } catch (switchErr) {
+        // If the chain is not added, add it
+        if (switchErr && switchErr.code === 4902) {
           await window.ethereum.request({
             method: "wallet_addEthereumChain",
             params: [{
-              chainId: PHAROS_CHAIN_ID,
-              chainName: "Pharos Testnet",
+              chainId: PHAROS_CHAIN_ID_HEX,
+              chainName: PHAROS_CHAIN_NAME,
               rpcUrls: [PHAROS_RPC],
               nativeCurrency: { name: "Pharos Test", symbol: "PHRS", decimals: 18 },
-              blockExplorerUrls: ["https://your_explorer_url"]
+              blockExplorerUrls: [PHAROS_EXPLORER]
             }]
           });
-
-          await window.ethereum.request({ method: "eth_requestAccounts" });
-
-          provider = new ethers.BrowserProvider(window.ethereum);
-          signer = await provider.getSigner();
-          console.log("Connected to:", await signer.getAddress());
-
-          // Show game after connect
-          document.getElementById("game").classList.remove("hidden");
-          init3DGame();
-          animate();
-        } catch (err) {
-          console.error("Wallet connection failed:", err);
+        } else {
+          throw switchErr;
         }
-      } else {
-        alert("MetaMask not found!");
       }
     }
 
-    document.getElementById("connectBtn").addEventListener("click", connectWallet);
+    async function connectWallet() {
+      if (!window.ethereum) {
+        statusEl.textContent = "MetaMask not found. Please install it.";
+        return;
+      }
+      try {
+        statusEl.textContent = "Connecting wallet…";
+        await ensurePharosNetwork();
 
-    // 3D Game Setup
-    function init3DGame() {
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        const addr = await signer.getAddress();
+
+        statusEl.textContent = `Connected to Pharos as ${addr.slice(0, 6)}…${addr.slice(-4)} — spinning!`;
+        startSpinning(); // auto-start the game after connect
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `Connect error: ${err.message || err}`;
+      }
+    }
+
+    connectBtn.addEventListener("click", connectWallet);
+
+    // ---------- THREE.JS SPIN GAME ----------
+    let scene, camera, renderer, cube, ring, spinning = false;
+
+    init3D();
+    animate();
+
+    function init3D() {
       const canvas = document.getElementById("spinCanvas");
 
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x111111);
 
-      camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-      camera.position.z = 5;
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.z = 6;
 
-      renderer = new THREE.WebGLRenderer({ canvas: canvas });
-      renderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
+      // Lights
+      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambient);
 
-      const geometry = new THREE.BoxGeometry();
-      const material = new THREE.MeshStandardMaterial({ color: 0x00ffcc });
-      cube = new THREE.Mesh(geometry, material);
+      const point = new THREE.PointLight(0x22d3ee, 1.2);
+      point.position.set(5, 5, 8);
+      scene.add(point);
+
+      // Main cube
+      const geo = new THREE.BoxGeometry(1.4, 1.4, 1.4);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, roughness: 0.2, metalness: 0.7 });
+      cube = new THREE.Mesh(geo, mat);
       scene.add(cube);
 
-      const light = new THREE.PointLight(0xffffff, 1, 100);
-      light.position.set(5, 5, 5);
-      scene.add(light);
+      // Neon ring
+      const ringGeo = new THREE.TorusGeometry(2.4, 0.08, 16, 100);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x59f0ff, wireframe: true });
+      ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 3;
+      scene.add(ring);
 
-      // Start spin on click
-      canvas.addEventListener("click", () => {
-        spinning = !spinning;
+      // Resize
+      window.addEventListener("resize", () => {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
       });
 
-      // Resize fix
-      window.addEventListener("resize", () => {
-        camera.aspect = canvas.offsetWidth / canvas.offsetHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
+      // Click/tap toggles spin (optional)
+      canvas.addEventListener("click", () => {
+        spinning = !spinning;
+        statusEl.textContent = (spinning ? "Spinning…" : "Paused.") + " (click canvas to toggle)";
       });
     }
 
-    // Animate
+    function startSpinning() {
+      spinning = true; // auto start after connect
+    }
+
     function animate() {
       requestAnimationFrame(animate);
 
+      // Idle motion
+      ring.rotation.z += 0.002;
+
       if (spinning) {
-        cube.rotation.x += 0.05;
-        cube.rotation.y += 0.05;
+        cube.rotation.x += 0.03;
+        cube.rotation.y += 0.035;
+      } else {
+        // gentle idle movement when paused
+        cube.rotation.y += 0.005;
       }
 
       renderer.render(scene, camera);
@@ -117,3 +180,4 @@
   </script>
 </body>
 </html>
+
