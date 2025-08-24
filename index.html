@@ -2,182 +2,96 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pharos Spin Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Ethers v6 -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.4/dist/ethers.umd.min.js"></script>
-  <!-- Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.4/dist/ethers.min.js"></script>
   <style>
-    /* Fullscreen 3D canvas behind UI */
-    #spinCanvas{
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      display: block;
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #101820;
+      color: white;
+    }
+    #wheel {
+      margin: 30px auto;
+      width: 300px;
+      height: 300px;
+      border: 15px solid #00d084;
+      border-radius: 50%;
+      position: relative;
+      transition: transform 4s cubic-bezier(0.33, 1, 0.68, 1);
+    }
+    #spinBtn {
+      margin-top: 20px;
+      padding: 15px 30px;
+      font-size: 18px;
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      background: #00d084;
+      color: #000;
     }
   </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen">
-
-  <!-- Canvas background -->
-  <canvas id="spinCanvas"></canvas>
-
-  <!-- Simple UI on top -->
-  <div class="relative z-10 flex flex-col items-center pt-16 gap-6">
-    <h1 class="text-3xl md:text-4xl font-extrabold">
-      🎮 Pharos Testnet Spin Game
-    </h1>
-
-    <button id="connectBtn"
-      class="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 shadow-lg">
-      Connect Wallet
-    </button>
-
-    <p id="status" class="text-sm text-slate-300"></p>
-  </div>
+<body>
+  <h1>🎰 Spin & Pay with PHRS</h1>
+  <div id="wheel"></div>
+  <button id="connectBtn">Connect Wallet</button>
+  <button id="spinBtn" disabled>Spin (0.1 PHRS)</button>
 
   <script>
-    // ---------- PHAROS NETWORK CONFIG ----------
-    const PHAROS_RPC = "https://testnet.dplabs-internal.com";
-    // 688,688 decimal -> 0xA8230 hex
-    const PHAROS_CHAIN_ID_HEX = "0xA8230";
-    const PHAROS_CHAIN_NAME = "Pharos Testnet";
-    const PHAROS_EXPLORER = "https://testnet.pharosscan.xyz";
-
-    // ---------- WALLET CONNECT ----------
-    const statusEl = document.getElementById("status");
-    const connectBtn = document.getElementById("connectBtn");
-
+    const GAME_TREASURY = "0xF787b0A9B186c24d19b8c1681aF09DbEEb2160E9"; // your wallet
     let provider, signer;
 
-    async function ensurePharosNetwork() {
-      // Try switch first; if not added, add then switch.
-      try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: PHAROS_CHAIN_ID_HEX }]
-        });
-      } catch (switchErr) {
-        // If the chain is not added, add it
-        if (switchErr && switchErr.code === 4902) {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [{
-              chainId: PHAROS_CHAIN_ID_HEX,
-              chainName: PHAROS_CHAIN_NAME,
-              rpcUrls: [PHAROS_RPC],
-              nativeCurrency: { name: "Pharos Test", symbol: "PHRS", decimals: 18 },
-              blockExplorerUrls: [PHAROS_EXPLORER]
-            }]
-          });
-        } else {
-          throw switchErr;
-        }
-      }
-    }
-
-    async function connectWallet() {
-      if (!window.ethereum) {
-        statusEl.textContent = "MetaMask not found. Please install it.";
+    // Connect wallet
+    document.getElementById("connectBtn").onclick = async () => {
+      if (typeof window.ethereum === "undefined") {
+        alert("Please install MetaMask!");
         return;
       }
       try {
-        statusEl.textContent = "Connecting wallet…";
-        await ensurePharosNetwork();
+        await ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: "0xA80F0", // 688688 in hex
+            chainName: "Pharos Testnet",
+            nativeCurrency: { name: "Pharos", symbol: "PHRS", decimals: 18 },
+            rpcUrls: ["https://testnet.dplabs-internal.com"],
+            blockExplorerUrls: ["https://testnet.pharosscan.xyz"]
+          }]
+        });
 
-        await window.ethereum.request({ method: "eth_requestAccounts" });
+        await ethereum.request({ method: "eth_requestAccounts" });
         provider = new ethers.BrowserProvider(window.ethereum);
         signer = await provider.getSigner();
-        const addr = await signer.getAddress();
-
-        statusEl.textContent = `Connected to Pharos as ${addr.slice(0, 6)}…${addr.slice(-4)} — spinning!`;
-        startSpinning(); // auto-start the game after connect
+        document.getElementById("spinBtn").disabled = false;
+        alert("Wallet connected to Pharos!");
       } catch (err) {
         console.error(err);
-        statusEl.textContent = `Connect error: ${err.message || err}`;
+        alert("Connection failed!");
       }
-    }
+    };
 
-    connectBtn.addEventListener("click", connectWallet);
+    // Spin + send 0.1 PHRS
+    document.getElementById("spinBtn").onclick = async () => {
+      try {
+        const wheel = document.getElementById("wheel");
+        const deg = Math.floor(Math.random() * 360) + 720; // spin at least 2 turns
+        wheel.style.transform = `rotate(${deg}deg)`;
 
-    // ---------- THREE.JS SPIN GAME ----------
-    let scene, camera, renderer, cube, ring, spinning = false;
+        // Send 0.1 PHRS
+        const tx = await signer.sendTransaction({
+          to: GAME_TREASURY,
+          value: ethers.parseEther("0.1")
+        });
 
-    init3D();
-    animate();
-
-    function init3D() {
-      const canvas = document.getElementById("spinCanvas");
-
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.setSize(window.innerWidth, window.innerHeight);
-
-      scene = new THREE.Scene();
-
-      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
-      camera.position.z = 6;
-
-      // Lights
-      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-      scene.add(ambient);
-
-      const point = new THREE.PointLight(0x22d3ee, 1.2);
-      point.position.set(5, 5, 8);
-      scene.add(point);
-
-      // Main cube
-      const geo = new THREE.BoxGeometry(1.4, 1.4, 1.4);
-      const mat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, roughness: 0.2, metalness: 0.7 });
-      cube = new THREE.Mesh(geo, mat);
-      scene.add(cube);
-
-      // Neon ring
-      const ringGeo = new THREE.TorusGeometry(2.4, 0.08, 16, 100);
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0x59f0ff, wireframe: true });
-      ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = Math.PI / 3;
-      scene.add(ring);
-
-      // Resize
-      window.addEventListener("resize", () => {
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-      });
-
-      // Click/tap toggles spin (optional)
-      canvas.addEventListener("click", () => {
-        spinning = !spinning;
-        statusEl.textContent = (spinning ? "Spinning…" : "Paused.") + " (click canvas to toggle)";
-      });
-    }
-
-    function startSpinning() {
-      spinning = true; // auto start after connect
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      // Idle motion
-      ring.rotation.z += 0.002;
-
-      if (spinning) {
-        cube.rotation.x += 0.03;
-        cube.rotation.y += 0.035;
-      } else {
-        // gentle idle movement when paused
-        cube.rotation.y += 0.005;
+        alert("Transaction sent! Hash: " + tx.hash);
+        console.log("TX:", tx);
+      } catch (err) {
+        console.error(err);
+        alert("Spin failed: " + err.message);
       }
-
-      renderer.render(scene, camera);
-    }
+    };
   </script>
 </body>
 </html>
-
