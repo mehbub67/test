@@ -2,130 +2,93 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Pharos 3D dApp Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pharos Spin Game</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.4/dist/ethers.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
 </head>
-<body class="bg-gradient-to-br from-gray-900 to-black text-white flex items-center justify-center min-h-screen">
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
 
-  <div class="bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-md relative z-10">
-    <h1 class="text-2xl font-bold mb-6 text-center">Pharos 3D dApp</h1>
+  <h1 class="text-3xl font-bold mb-6">🎮 Pharos Testnet Spin Game</h1>
 
-    <!-- Wallet Connect -->
-    <button id="connectWallet"
-            class="w-full bg-indigo-600 py-2 rounded-lg mb-4 hover:bg-indigo-500 transition">
-      Connect Wallet
-    </button>
-    <p id="walletAddress" class="text-sm text-gray-300 mb-6 text-center">Not connected</p>
+  <!-- Connect Button -->
+  <button id="connectBtn"
+    class="px-6 py-3 bg-indigo-600 rounded-xl hover:bg-indigo-700">
+    Connect Wallet
+  </button>
 
-    <!-- Token Cut Form -->
-    <input id="amount" type="number" placeholder="Enter token amount"
-           class="w-full p-2 rounded mb-4 text-black" />
-    <button id="approveBtn"
-            class="w-full bg-green-600 py-2 rounded-lg hover:bg-green-500 transition">
-      Approve & Cut
-    </button>
-
-    <!-- Status -->
-    <p id="status" class="mt-4 text-sm text-gray-300 text-center"></p>
+  <!-- Game Canvas -->
+  <div id="game" class="mt-10 w-full h-96 hidden">
+    <canvas id="spinCanvas"></canvas>
   </div>
 
-  <!-- 3D Spin Game -->
-  <canvas id="gameCanvas" class="absolute top-0 left-0 w-full h-full z-0"></canvas>
-
   <script>
-    let provider, signer, token;
-    let spinActive = false;
-
-    // Replace with real test addresses
-    const tokenAddress = "0xYourTestTokenAddress";
-    const gameContract = "0xYourGameContractAddress";
-
-    const tokenABI = [
-      "function approve(address spender, uint amount) public returns(bool)",
-      "function allowance(address owner, address spender) public view returns(uint)"
-    ];
+    let provider, signer, scene, camera, renderer, cube, spinning = false;
 
     // Wallet connect
-    document.getElementById("connectWallet").onclick = async () => {
+    async function connectWallet() {
       if (window.ethereum) {
         try {
+          await window.ethereum.request({ method: "eth_requestAccounts" });
           provider = new ethers.BrowserProvider(window.ethereum);
           signer = await provider.getSigner();
-          const addr = await signer.getAddress();
-          document.getElementById("walletAddress").textContent = "Connected: " + addr;
-          token = new ethers.Contract(tokenAddress, tokenABI, signer);
-          spinActive = true; // Start 3D spin when connected
+
+          const address = await signer.getAddress();
+          console.log("Connected:", address);
+
+          // Show game after connect
+          document.getElementById("game").classList.remove("hidden");
+          init3DGame();
+          animate();
         } catch (err) {
-          alert("Connection failed: " + err.message);
+          console.error("Wallet connection failed:", err);
         }
       } else {
-        alert("MetaMask not found. Please install it.");
+        alert("MetaMask not found!");
       }
-    };
+    }
 
-    // Approve
-    document.getElementById("approveBtn").onclick = async () => {
-      if (!signer) {
-        alert("Connect wallet first");
-        return;
-      }
+    document.getElementById("connectBtn").addEventListener("click", connectWallet);
 
-      const amount = document.getElementById("amount").value;
-      if (!amount || amount <= 0) {
-        alert("Enter a valid amount");
-        return;
-      }
+    // 3D Game Setup
+    function init3DGame() {
+      const canvas = document.getElementById("spinCanvas");
 
-      try {
-        const tx = await token.approve(gameContract, ethers.parseUnits(amount, 18));
-        document.getElementById("status").textContent = "Approving... " + tx.hash;
-        await tx.wait();
-        document.getElementById("status").textContent = "Approved successfully ✅";
-      } catch (err) {
-        document.getElementById("status").textContent = "Error: " + err.message;
-      }
-    };
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x111111);
 
-    // ===================== 3D SPIN GAME =====================
-    const canvas = document.getElementById("gameCanvas");
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
+      camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+      camera.position.z = 5;
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    camera.position.z = 5;
+      renderer = new THREE.WebGLRenderer({ canvas: canvas });
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
 
-    const geometry = new THREE.BoxGeometry();
-    const material = new THREE.MeshStandardMaterial({ color: 0x00ffcc, metalness: 0.7, roughness: 0.2 });
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
+      const geometry = new THREE.BoxGeometry();
+      const material = new THREE.MeshStandardMaterial({ color: 0x00ffcc });
+      cube = new THREE.Mesh(geometry, material);
+      scene.add(cube);
 
-    // Lighting
-    const light = new THREE.PointLight(0xffffff, 1);
-    light.position.set(5, 5, 5);
-    scene.add(light);
+      const light = new THREE.PointLight(0xffffff, 1, 100);
+      light.position.set(5, 5, 5);
+      scene.add(light);
 
+      // Start spin on click
+      canvas.addEventListener("click", () => {
+        spinning = !spinning;
+      });
+    }
+
+    // Animate
     function animate() {
       requestAnimationFrame(animate);
 
-      if (spinActive) {
-        cube.rotation.x += 0.03;
-        cube.rotation.y += 0.03;
+      if (spinning) {
+        cube.rotation.x += 0.05;
+        cube.rotation.y += 0.05;
       }
 
       renderer.render(scene, camera);
     }
-    animate();
-
-    // Resize handling
-    window.addEventListener("resize", () => {
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-    });
   </script>
 </body>
 </html>
